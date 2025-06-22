@@ -185,6 +185,14 @@ def approve_delivery(batch_id):
     plate = Plate.query.filter_by(size=inbound.plate_size).first()
     if plate:
         plate.quantity += inbound.quantity
+    else:
+        # Create new plate if it doesn't exist
+        plate = Plate(
+            size=inbound.plate_size,
+            quantity=inbound.quantity,
+            threshold=50  # Default threshold
+        )
+        db.session.add(plate)
     
     # Mark as approved
     inbound.status = 'approved'
@@ -294,19 +302,73 @@ def generate_pallet_id():
     pallet_id = f"PLT{timestamp}{random_num}"
     return jsonify({'pallet_id': pallet_id})
 
+# Initialize database with sample data
+def init_sample_plates():
+    """Initialize the database with sample plate sizes if empty"""
+    plate_sizes = [
+        '50x100', '75x150', '100x200', '50x150', '75x100', '100x150',
+        '50x200', '75x200', '100x100', '125x150', '125x200', '150x200',
+        '50x250', '75x250', '100x250', '125x250', '150x250', '200x250',
+        '50x300', '75x300', '100x300', '125x300', '150x300', '200x300',
+        '62x150', '87x200', '112x250', '137x300', '162x350', '187x400',
+        '38x125', '63x175', '88x225', '113x275', '138x325', '163x375',
+        '44x140', '69x190', '94x240'
+    ]
+    
+    try:
+        # Check if we have any plates
+        if Plate.query.count() == 0:
+            print("No plates found, initializing with sample data...")
+            
+            # Add sample plates
+            for size in plate_sizes:
+                plate = Plate(
+                    size=size,
+                    quantity=100,  # Default starting quantity
+                    threshold=50   # Default threshold
+                )
+                db.session.add(plate)
+            
+            db.session.commit()
+            print(f"Added {len(plate_sizes)} sample plate sizes")
+            
+            # Add a sample pending delivery for demonstration
+            sample_inbound = InboundQueue(
+                plate_size='75x150',
+                quantity=500,
+                batch_id='PLT123456789',
+                status='pending',
+                boxes=20,
+                plates_per_box=25
+            )
+            db.session.add(sample_inbound)
+            db.session.commit()
+            print("Added sample pending delivery")
+            
+    except Exception as e:
+        print(f"Error initializing sample data: {e}")
+        db.session.rollback()
+
 # Initialize database
 def init_db():
     with app.app_context():
         try:
             print("=== DATABASE INITIALIZATION START ===")
             db.create_all()
-            print("Empty tables created successfully")
+            print("Database tables created successfully")
             
-            # Check if plates table exists and has data
+            # Initialize sample data if needed
+            init_sample_plates()
+            
+            # Check current state
             plate_count = Plate.query.count()
             transaction_count = Transaction.query.count()
+            pending_count = InboundQueue.query.filter_by(status='pending').count()
             
-            print(f"Found {plate_count} plates and {transaction_count} transactions in database")
+            print(f"Current database state:")
+            print(f"  - Plates: {plate_count}")
+            print(f"  - Transactions: {transaction_count}")
+            print(f"  - Pending deliveries: {pending_count}")
             print("=== DATABASE INITIALIZATION END ===")
                 
         except Exception as e:
