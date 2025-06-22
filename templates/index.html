@@ -11,256 +11,6 @@
             box-sizing: border-box;
         }
 
-        // Admin Page Functions
-        function updateAdminPage() {
-            updateEditableInventory();
-            updateQRGeneratorPage();
-        }
-
-        function updateEditableInventory() {
-            const editableInventory = document.getElementById('editable-inventory');
-            editableInventory.innerHTML = '';
-
-            plates.forEach(plate => {
-                const row = document.createElement('tr');
-                const isLowStock = plate.quantity <= plate.threshold;
-
-                row.innerHTML = `
-                    <td>${plate.size}</td>
-                    <td>
-                        <input type="number" value="${plate.quantity}" 
-                               onchange="updatePlateData(${plate.id}, 'quantity', this.value)" 
-                               min="0">
-                    </td>
-                    <td>
-                        <input type="number" value="${plate.threshold}" 
-                               onchange="updatePlateData(${plate.id}, 'threshold', this.value)" 
-                               min="0">
-                    </td>
-                    <td>
-                        <span class="status ${isLowStock ? 'low' : 'ok'}">
-                            ${isLowStock ? '⚠️ Low' : '✅ OK'}
-                        </span>
-                    </td>
-                `;
-                editableInventory.appendChild(row);
-            });
-        }
-
-        function updatePlateData(plateId, field, value) {
-            const plate = plates.find(p => p.id === plateId);
-            if (plate) {
-                plate[field] = parseInt(value);
-                updateDashboard();
-                updateEditableInventory();
-            }
-        }
-
-        function saveInventoryChanges() {
-            alert('All inventory changes have been saved!');
-            updateDashboard();
-        }
-
-        function exportInventory() {
-            const csvContent = "data:text/csv;charset=utf-8," + 
-                "plate_size,quantity,threshold\n" +
-                plates.map(plate => `${plate.size},${plate.quantity},${plate.threshold}`).join('\n');
-            
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `inventory_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function exportTransactions() {
-            const csvContent = "data:text/csv;charset=utf-8," + 
-                "date,plate_size,quantity,type,source,batch_id\n" +
-                transactions.map(tx => `${tx.date},${tx.plate_size},${tx.quantity},${tx.type},${tx.source},${tx.batch_id || ''}`).join('\n');
-            
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `transactions_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function importData() {
-            const fileInput = document.getElementById('import-file');
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                alert('Please select a CSV file first.');
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const csv = e.target.result;
-                    const lines = csv.split('\n');
-                    const headers = lines[0].split(',');
-                    
-                    // Validate headers
-                    if (!headers.includes('plate_size') || !headers.includes('quantity') || !headers.includes('threshold')) {
-                        throw new Error('CSV must have columns: plate_size, quantity, threshold');
-                    }
-
-                    // Process data
-                    let updatedCount = 0;
-                    for (let i = 1; i < lines.length; i++) {
-                        const values = lines[i].split(',');
-                        if (values.length >= 3) {
-                            const plateSize = values[0].trim();
-                            const quantity = parseInt(values[1]);
-                            const threshold = parseInt(values[2]);
-                            
-                            const plate = plates.find(p => p.size === plateSize);
-                            if (plate) {
-                                plate.quantity = quantity;
-                                plate.threshold = threshold;
-                                updatedCount++;
-                            }
-                        }
-                    }
-
-                    alert(`Successfully updated ${updatedCount} plate entries!`);
-                    updateUI();
-                    updateAdminPage();
-                    
-                } catch (error) {
-                    alert(`Error importing CSV: ${error.message}`);
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        function resetSystem() {
-            if (confirm('Are you sure you want to reset ALL data? This cannot be undone.')) {
-                if (confirm('This will delete all inventory, transactions, and pending deliveries. Continue?')) {
-                    initializeData();
-                    inboundQueue = [];
-                    transactions = [];
-                    alert('System has been reset to initial state.');
-                    updateUI();
-                }
-            }
-        }
-
-        // QR Generator Functions
-        function updateQRGeneratorPage() {
-            const plateSelect = document.getElementById('qr-plate-size');
-            plateSelect.innerHTML = plates.map(plate => 
-                `<option value="${plate.size}">${plate.size}</option>`
-            ).join('');
-        }
-
-        function generateBatchId() {
-            const timestamp = Date.now();
-            const random = Math.floor(Math.random() * 1000);
-            return `BATCH${timestamp}${random}`;
-        }
-
-        function generateQRCodeSVG(text) {
-            // Simple QR code placeholder - in real implementation, use a QR library
-            return `
-                <svg width="150" height="150" viewBox="0 0 150 150">
-                    <rect width="150" height="150" fill="white" stroke="#000" stroke-width="1"/>
-                    <text x="75" y="75" text-anchor="middle" dominant-baseline="middle" font-size="8" fill="#000">
-                        QR CODE
-                    </text>
-                    <text x="75" y="90" text-anchor="middle" dominant-baseline="middle" font-size="6" fill="#666">
-                        ${text.length > 20 ? text.substring(0, 20) + '...' : text}
-                    </text>
-                </svg>
-            `;
-        }
-
-        function generateSingleQR(plateSize, quantity, batchId, baseUrl) {
-            const url = `${baseUrl}?plate=${plateSize}&qty=${quantity}&batch=${batchId}`;
-            
-            return `
-                <div class="qr-card">
-                    <h4>Plate: ${plateSize}</h4>
-                    <p>Quantity: ${quantity}</p>
-                    <p>Batch: ${batchId}</p>
-                    <div class="qr-code">
-                        ${generateQRCodeSVG(url)}
-                    </div>
-                    <small style="word-break: break-all;">${url}</small>
-                    <br><br>
-                    <button class="btn" onclick="downloadQR('${batchId}', '${url}')">📥 Download</button>
-                    <button class="btn" onclick="printQR('${batchId}')">🖨️ Print</button>
-                </div>
-            `;
-        }
-
-        function generateBatchQRs() {
-            const commonSizes = ['50x100', '75x150', '100x200', '50x150', '75x100', '100x150', '50x200', '75x200', '100x100', '125x150'];
-            const baseUrl = document.getElementById('base-url').value;
-            const generatedDiv = document.getElementById('generated-qr');
-            
-            let html = '<h3>📦 Batch Generated QR Codes</h3>';
-            
-            commonSizes.forEach(size => {
-                const batchId = generateBatchId();
-                const quantity = 100; // Default quantity
-                html += generateSingleQR(size, quantity, batchId, baseUrl);
-            });
-            
-            generatedDiv.innerHTML = html;
-        }
-
-        function generateAllQRs() {
-            const baseUrl = document.getElementById('base-url').value;
-            const generatedDiv = document.getElementById('generated-qr');
-            
-            let html = '<h3>🎯 All Plate Sizes QR Codes</h3>';
-            
-            plates.forEach(plate => {
-                const batchId = generateBatchId();
-                const quantity = 100; // Default quantity
-                html += generateSingleQR(plate.size, quantity, batchId, baseUrl);
-            });
-            
-            generatedDiv.innerHTML = html;
-        }
-
-        function downloadQR(batchId, url) {
-            // Create a simple text file with the QR data
-            const content = `QR Code Data for Batch: ${batchId}\nURL: ${url}\n\nUse this URL to generate a real QR code with your preferred QR generator.`;
-            const blob = new Blob([content], { type: 'text/plain' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `qr_${batchId}.txt`;
-            link.click();
-        }
-
-        function printQR(batchId) {
-            alert(`Print function for ${batchId} - In a real implementation, this would send the QR code to your printer.`);
-        }
-
-        // QR Form submission
-        document.getElementById('qr-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const plateSize = document.getElementById('qr-plate-size').value;
-            const boxes = parseInt(document.getElementById('qr-boxes').value);
-            const platesPerBox = parseInt(document.getElementById('qr-plates-per-box').value);
-            const palletId = generatePalletId();
-            
-            // Update the pallet ID field to show what was generated
-            document.getElementById('pallet-id').value = palletId;
-            
-            const generatedDiv = document.getElementById('generated-qr');
-            generatedDiv.innerHTML = '<h3>📱 Generated Pallet QR Code</h3>' + 
-                generatePalletQR(plateSize, boxes, platesPerBox, palletId);
-        });
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f5f5f5;
@@ -581,6 +331,12 @@
             margin: 20px 0;
         }
 
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
         @media (max-width: 600px) {
             body {
                 padding: 10px;
@@ -631,7 +387,7 @@
             <div id="dashboard" class="page active">
                 <div class="stats">
                     <div class="stat-card">
-                        <div class="stat-number" id="total-plates">39</div>
+                        <div class="stat-number" id="total-plates">0</div>
                         <div class="stat-label">Total Plate Types</div>
                     </div>
                     <div class="stat-card">
@@ -654,6 +410,7 @@
                         </tr>
                     </thead>
                     <tbody id="inventory-table">
+                        <tr><td colspan="4" class="loading">Loading inventory...</td></tr>
                     </tbody>
                 </table>
 
@@ -670,7 +427,7 @@
                     <p><strong>Scan pallet QR code or enter data manually:</strong></p>
                     <div class="form-group">
                         <label>QR Code Data:</label>
-                        <input type="text" id="qr-url" placeholder="76x254|44|88|PLT123456 or legacy URL format">
+                        <input type="text" id="qr-url" placeholder="76x254|44|88|PLT123456">
                         <small>Format: PlateSize|BoxesOnPallet|PlatesPerBox|PalletID</small>
                     </div>
                     <button class="btn" onclick="processQRCode()">📦 Process Pallet QR Code</button>
@@ -681,7 +438,9 @@
             <!-- Pending Page -->
             <div id="pending" class="page">
                 <h2>Pending Inbound Deliveries</h2>
-                <div id="pending-list"></div>
+                <div id="pending-list">
+                    <p class="loading">Loading pending deliveries...</p>
+                </div>
             </div>
 
             <!-- Manual Entry Page -->
@@ -690,7 +449,9 @@
                 <form id="manual-form">
                     <div class="form-group">
                         <label for="manual-plate">Plate Size:</label>
-                        <select id="manual-plate" required></select>
+                        <select id="manual-plate" required>
+                            <option value="">Loading plates...</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="manual-type">Adjustment Type:</label>
@@ -728,9 +489,9 @@
                             </tr>
                         </thead>
                         <tbody id="editable-inventory">
+                            <tr><td colspan="4" class="loading">Loading inventory...</td></tr>
                         </tbody>
                     </table>
-                    <button class="btn" onclick="saveInventoryChanges()">💾 Save All Changes</button>
                 </div>
 
                 <div class="data-section">
@@ -741,19 +502,9 @@
                 </div>
 
                 <div class="data-section">
-                    <h3>📥 Import Data</h3>
-                    <p>Upload a CSV file to update inventory in bulk:</p>
-                    <div class="file-upload">
-                        <input type="file" id="import-file" accept=".csv" />
-                        <button class="btn" onclick="importData()">🔄 Import CSV</button>
-                    </div>
-                    <small>CSV format: plate_size,quantity,threshold</small>
-                </div>
-
-                <div class="data-section">
-                    <h3>🗑️ Reset System</h3>
-                    <p>Reset all data to initial state:</p>
-                    <button class="btn danger" onclick="resetSystem()">⚠️ Reset All Data</button>
+                    <h3>🗑️ Clear All Data</h3>
+                    <p>Remove all data from the system. This action cannot be undone!</p>
+                    <button class="btn danger" onclick="clearAllData()">⚠️ Clear All Data</button>
                 </div>
             </div>
 
@@ -766,7 +517,9 @@
                     <form id="qr-form">
                         <div class="form-group">
                             <label for="qr-plate-size">Plate Size:</label>
-                            <select id="qr-plate-size" required></select>
+                            <select id="qr-plate-size" required>
+                                <option value="">Loading plates...</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label for="qr-boxes">Number of Boxes on Pallet:</label>
@@ -780,23 +533,11 @@
                             <label>Total Plates on Pallet:</label>
                             <input type="text" id="total-plates-display" readonly style="background: #f8f9fa; font-weight: bold;">
                         </div>
-                        <div class="form-group">
-                            <label for="pallet-id">Pallet ID:</label>
-                            <input type="text" id="pallet-id" placeholder="Will be auto-generated" readonly style="background: #f8f9fa;">
-                            <small>Unique pallet tracking ID (auto-generated)</small>
-                        </div>
                         <button type="submit" class="btn">📱 Generate Pallet QR Code</button>
                     </form>
                 </div>
 
                 <div id="generated-qr" class="qr-grid"></div>
-
-                <div class="data-section">
-                    <h3>📦 Batch Pallet QR Generation</h3>
-                    <p>Generate multiple QR codes for common plate sizes with default pallet configuration:</p>
-                    <button class="btn" onclick="generateBatchQRs()">🔄 Generate Common Sizes (10 Pallets)</button>
-                    <button class="btn" onclick="generateAllQRs()">📱 Generate All 39 Sizes</button>
-                </div>
             </div>
 
             <!-- Transactions Page -->
@@ -814,6 +555,7 @@
                         </tr>
                     </thead>
                     <tbody id="transactions-table">
+                        <tr><td colspan="6" class="loading">Loading transactions...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -821,240 +563,129 @@
     </div>
 
     <script>
-        // In-memory database simulation
+        // Global state
         let plates = [];
-        let inboundQueue = [];
+        let pendingDeliveries = [];
         let transactions = [];
 
-        // Initialize with sample data
-        function initializeData() {
-            // Sample plate sizes with realistic data
-            const plateSizes = [
-                '50x100', '75x150', '100x200', '50x150', '75x100', '100x150',
-                '50x200', '75x200', '100x100', '125x150', '125x200', '150x200',
-                '50x250', '75x250', '100x250', '125x250', '150x250', '200x250',
-                '50x300', '75x300', '100x300', '125x300', '150x300', '200x300',
-                '62x150', '87x200', '112x250', '137x300', '162x350', '187x400',
-                '38x125', '63x175', '88x225', '113x275', '138x325', '163x375',
-                '44x140', '69x190', '94x240'
-            ];
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPlates();
+            loadStats();
+            loadPending();
+            loadTransactions();
+            
+            // Refresh stats every 30 seconds
+            setInterval(() => {
+                loadStats();
+                loadPending();
+            }, 30000);
+        });
 
-            plates = plateSizes.map((size, index) => ({
-                id: index + 1,
-                size: size,
-                quantity: Math.floor(Math.random() * 400) + 50,
-                threshold: Math.floor(Math.random() * 100) + 50
-            }));
-
-            // Add some sample pending deliveries
-            inboundQueue = [
-                {
-                    id: 1,
-                    plate_size: '75x150',
-                    quantity: 500,
-                    batch_id: 'PLT123456789',
-                    status: 'pending',
-                    timestamp: new Date().toISOString(),
-                    boxes: 20,
-                    plates_per_box: 25
+        // API functions
+        async function apiCall(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'API call failed');
                 }
-            ];
-
-            updateUI();
-        }
-
-        function showPage(pageId) {
-            // Hide all pages
-            document.querySelectorAll('.page').forEach(page => {
-                page.classList.remove('active');
-            });
-            
-            // Remove active class from all nav buttons
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Show selected page
-            document.getElementById(pageId).classList.add('active');
-            
-            // Add active class to clicked button
-            event.target.classList.add('active');
-
-            // Update page content if needed
-            if (pageId === 'pending') {
-                updatePendingList();
-            } else if (pageId === 'manual') {
-                updateManualForm();
-            } else if (pageId === 'admin') {
-                updateAdminPage();
-            } else if (pageId === 'qr-generator') {
-                updateQRGeneratorPage();
-            } else if (pageId === 'transactions') {
-                updateTransactionsTable();
+                
+                return await response.json();
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
             }
         }
 
-        function updateUI() {
-            updateDashboard();
-            updatePendingCount();
+        // Load functions
+        async function loadPlates() {
+            try {
+                plates = await apiCall('/api/plates');
+                updateDashboard();
+                updateManualForm();
+                updateQRGeneratorForm();
+                updateEditableInventory();
+                document.getElementById('total-plates').textContent = plates.length;
+            } catch (error) {
+                console.error('Error loading plates:', error);
+            }
         }
 
+        async function loadStats() {
+            try {
+                const stats = await apiCall('/api/stats');
+                document.getElementById('total-plates').textContent = stats.total_plates || 0;
+                document.getElementById('low-stock').textContent = stats.low_stock || 0;
+                document.getElementById('pending-deliveries').textContent = stats.pending_deliveries || 0;
+                document.getElementById('pending-count').textContent = stats.pending_deliveries || 0;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadPending() {
+            try {
+                pendingDeliveries = await apiCall('/api/pending');
+                updatePendingList();
+            } catch (error) {
+                console.error('Error loading pending:', error);
+            }
+        }
+
+        async function loadTransactions() {
+            try {
+                transactions = await apiCall('/api/transactions');
+                updateTransactionsTable();
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+            }
+        }
+
+        // UI Update functions
         function updateDashboard() {
-            const inventoryTable = document.getElementById('inventory-table');
-            inventoryTable.innerHTML = '';
-
-            let lowStockCount = 0;
-
-            plates.forEach(plate => {
-                const row = document.createElement('tr');
-                const isLowStock = plate.quantity <= plate.threshold;
-                if (isLowStock) lowStockCount++;
-
-                row.innerHTML = `
+            const tbody = document.querySelector('#inventory-table');
+            
+            if (plates.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">No inventory data available</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = plates.map(plate => `
+                <tr>
                     <td>${plate.size}</td>
                     <td>${plate.quantity}</td>
                     <td>${plate.threshold}</td>
                     <td>
-                        <span class="status ${isLowStock ? 'low' : 'ok'}">
-                            ${isLowStock ? '⚠️ Low' : '✅ OK'}
+                        <span class="status ${plate.status}">
+                            ${plate.status === 'ok' ? '✅ OK' : '⚠️ Low'}
                         </span>
                     </td>
-                `;
-                inventoryTable.appendChild(row);
-            });
-
-            // Update stats
-            document.getElementById('low-stock').textContent = lowStockCount;
-            document.getElementById('pending-deliveries').textContent = inboundQueue.filter(item => item.status === 'pending').length;
-        }
-
-        function updatePendingCount() {
-            const pendingCount = inboundQueue.filter(item => item.status === 'pending').length;
-            document.getElementById('pending-count').textContent = pendingCount;
-        }
-
-        function processQRCode() {
-            const qrData = document.getElementById('qr-url').value.trim();
-            const resultDiv = document.getElementById('qr-result');
-
-            try {
-                let plate, totalQty, palletId;
-
-                // Check if it's the new pallet format (pipe-separated)
-                if (qrData.includes('|')) {
-                    const parts = qrData.split('|');
-                    if (parts.length !== 4) {
-                        throw new Error('Invalid pallet format. Expected: PlateSize|BoxesOnPallet|PlatesPerBox|PalletID');
-                    }
-
-                    plate = parts[0].trim();
-                    const boxes = parseInt(parts[1]);
-                    const platesPerBox = parseInt(parts[2]);
-                    palletId = parts[3].trim();
-                    totalQty = boxes * platesPerBox;
-
-                    if (!plate || isNaN(boxes) || isNaN(platesPerBox) || !palletId) {
-                        throw new Error('Invalid data in pallet QR code');
-                    }
-
-                    // Check if pallet ID already exists
-                    if (inboundQueue.some(item => item.batch_id === palletId)) {
-                        resultDiv.innerHTML = '<div class="alert error">Error: Pallet ID already exists. Duplicate scan prevented.</div>';
-                        return;
-                    }
-
-                    // Add to inbound queue
-                    const newInbound = {
-                        id: inboundQueue.length + 1,
-                        plate_size: plate,
-                        quantity: totalQty,
-                        batch_id: palletId,
-                        status: 'pending',
-                        timestamp: new Date().toISOString(),
-                        boxes: boxes,
-                        plates_per_box: platesPerBox
-                    };
-
-                    inboundQueue.push(newInbound);
-
-                    resultDiv.innerHTML = `
-                        <div class="alert success">
-                            <strong>✅ Pallet QR Code Processed Successfully!</strong><br>
-                            <strong>Plate Size:</strong> ${plate}<br>
-                            <strong>Boxes on Pallet:</strong> ${boxes}<br>
-                            <strong>Plates per Box:</strong> ${platesPerBox}<br>
-                            <strong>Total Plates:</strong> ${totalQty}<br>
-                            <strong>Pallet ID:</strong> ${palletId}<br>
-                            <strong>Status:</strong> Pending Approval
-                        </div>
-                    `;
-
-                } else {
-                    // Legacy URL format support
-                    const urlObj = new URL(qrData);
-                    const params = new URLSearchParams(urlObj.search);
-                    
-                    plate = params.get('plate');
-                    totalQty = parseInt(params.get('qty'));
-                    palletId = params.get('batch');
-
-                    if (!plate || !totalQty || !palletId) {
-                        throw new Error('Missing required parameters in URL');
-                    }
-
-                    // Check if batch already exists
-                    if (inboundQueue.some(item => item.batch_id === palletId)) {
-                        resultDiv.innerHTML = '<div class="alert error">Error: Batch ID already exists. Duplicate scan prevented.</div>';
-                        return;
-                    }
-
-                    // Add to inbound queue (legacy format)
-                    const newInbound = {
-                        id: inboundQueue.length + 1,
-                        plate_size: plate,
-                        quantity: totalQty,
-                        batch_id: palletId,
-                        status: 'pending',
-                        timestamp: new Date().toISOString()
-                    };
-
-                    inboundQueue.push(newInbound);
-
-                    resultDiv.innerHTML = `
-                        <div class="alert success">
-                            <strong>QR Code Processed Successfully!</strong><br>
-                            Plate: ${plate}<br>
-                            Quantity: ${totalQty}<br>
-                            Batch: ${palletId}<br>
-                            Status: Pending Approval
-                        </div>
-                    `;
-                }
-
-                document.getElementById('qr-url').value = '';
-                updateUI();
-
-            } catch (error) {
-                resultDiv.innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
-            }
+                </tr>
+            `).join('');
         }
 
         function updatePendingList() {
             const pendingList = document.getElementById('pending-list');
-            const pendingItems = inboundQueue.filter(item => item.status === 'pending');
-
-            if (pendingItems.length === 0) {
+            
+            if (pendingDeliveries.length === 0) {
                 pendingList.innerHTML = '<p>No pending deliveries.</p>';
                 return;
             }
 
-            pendingList.innerHTML = pendingItems.map(item => {
+            pendingList.innerHTML = pendingDeliveries.map(item => {
                 let detailsHtml = `
                     <strong>Plate Size:</strong> ${item.plate_size}<br>
                     <strong>Total Quantity:</strong> ${item.quantity}<br>
                 `;
 
-                // Show pallet details if available
                 if (item.boxes && item.plates_per_box) {
                     detailsHtml += `
                         <strong>Boxes on Pallet:</strong> ${item.boxes}<br>
@@ -1079,198 +710,20 @@
             }).join('');
         }
 
-        function approveDelivery(batchId) {
-            const item = inboundQueue.find(item => item.batch_id === batchId);
-            if (!item) return;
-
-            // Update plate stock
-            const plate = plates.find(p => p.size === item.plate_size);
-            if (plate) {
-                plate.quantity += item.quantity;
-            }
-
-            // Mark as approved
-            item.status = 'approved';
-
-            // Add transaction
-            addTransaction({
-                plate_size: item.plate_size,
-                quantity: item.quantity,
-                type: 'in',
-                source: 'qr',
-                batch_id: batchId
-            });
-
-            updateUI();
-            updatePendingList();
-        }
-
-        function rejectDelivery(batchId) {
-            const item = inboundQueue.find(item => item.batch_id === batchId);
-            if (!item) return;
-
-            item.status = 'rejected';
-            updateUI();
-            updatePendingList();
-        }
-
         function updateManualForm() {
             const plateSelect = document.getElementById('manual-plate');
-            plateSelect.innerHTML = plates.map(plate => 
-                `<option value="${plate.size}">${plate.size}</option>`
-            ).join('');
+            plateSelect.innerHTML = '<option value="">Select a plate size</option>' +
+                plates.map(plate => `<option value="${plate.size}">${plate.size}</option>`).join('');
         }
 
-        // Admin Page Functions
-        function updateAdminPage() {
-            updateEditableInventory();
-            updateQRGeneratorPage();
-        }
-
-        function updateEditableInventory() {
-            const editableInventory = document.getElementById('editable-inventory');
-            editableInventory.innerHTML = '';
-
-            plates.forEach(plate => {
-                const row = document.createElement('tr');
-                const isLowStock = plate.quantity <= plate.threshold;
-
-                row.innerHTML = `
-                    <td>${plate.size}</td>
-                    <td>
-                        <input type="number" value="${plate.quantity}" 
-                               onchange="updatePlateData(${plate.id}, 'quantity', this.value)" 
-                               min="0">
-                    </td>
-                    <td>
-                        <input type="number" value="${plate.threshold}" 
-                               onchange="updatePlateData(${plate.id}, 'threshold', this.value)" 
-                               min="0">
-                    </td>
-                    <td>
-                        <span class="status ${isLowStock ? 'low' : 'ok'}">
-                            ${isLowStock ? '⚠️ Low' : '✅ OK'}
-                        </span>
-                    </td>
-                `;
-                editableInventory.appendChild(row);
-            });
-        }
-
-        function updatePlateData(plateId, field, value) {
-            const plate = plates.find(p => p.id === plateId);
-            if (plate) {
-                plate[field] = parseInt(value);
-                updateDashboard();
-                updateEditableInventory();
-            }
-        }
-
-        function saveInventoryChanges() {
-            alert('All inventory changes have been saved!');
-            updateDashboard();
-        }
-
-        function exportInventory() {
-            const csvContent = "data:text/csv;charset=utf-8," + 
-                "plate_size,quantity,threshold\n" +
-                plates.map(plate => `${plate.size},${plate.quantity},${plate.threshold}`).join('\n');
-            
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `inventory_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function exportTransactions() {
-            const csvContent = "data:text/csv;charset=utf-8," + 
-                "date,plate_size,quantity,type,source,batch_id\n" +
-                transactions.map(tx => `${tx.date},${tx.plate_size},${tx.quantity},${tx.type},${tx.source},${tx.batch_id || ''}`).join('\n');
-            
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `transactions_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function importData() {
-            const fileInput = document.getElementById('import-file');
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                alert('Please select a CSV file first.');
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const csv = e.target.result;
-                    const lines = csv.split('\n');
-                    const headers = lines[0].split(',');
-                    
-                    // Validate headers
-                    if (!headers.includes('plate_size') || !headers.includes('quantity') || !headers.includes('threshold')) {
-                        throw new Error('CSV must have columns: plate_size, quantity, threshold');
-                    }
-
-                    // Process data
-                    let updatedCount = 0;
-                    for (let i = 1; i < lines.length; i++) {
-                        const values = lines[i].split(',');
-                        if (values.length >= 3) {
-                            const plateSize = values[0].trim();
-                            const quantity = parseInt(values[1]);
-                            const threshold = parseInt(values[2]);
-                            
-                            const plate = plates.find(p => p.size === plateSize);
-                            if (plate) {
-                                plate.quantity = quantity;
-                                plate.threshold = threshold;
-                                updatedCount++;
-                            }
-                        }
-                    }
-
-                    alert(`Successfully updated ${updatedCount} plate entries!`);
-                    updateUI();
-                    updateAdminPage();
-                    
-                } catch (error) {
-                    alert(`Error importing CSV: ${error.message}`);
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        function resetSystem() {
-            if (confirm('Are you sure you want to reset ALL data? This cannot be undone.')) {
-                if (confirm('This will delete all inventory, transactions, and pending deliveries. Continue?')) {
-                    initializeData();
-                    inboundQueue = [];
-                    transactions = [];
-                    alert('System has been reset to initial state.');
-                    updateUI();
-                }
-            }
-        }
-
-        // QR Generator Functions
-        function updateQRGeneratorPage() {
+        function updateQRGeneratorForm() {
             const plateSelect = document.getElementById('qr-plate-size');
             if (plateSelect) {
-                plateSelect.innerHTML = plates.map(plate => 
-                    `<option value="${plate.size}">${plate.size}</option>`
-                ).join('');
+                plateSelect.innerHTML = '<option value="">Select a plate size</option>' +
+                    plates.map(plate => `<option value="${plate.size}">${plate.size}</option>`).join('');
             }
             
-            // Add event listeners for calculation
+            // Update total calculation
             const boxesInput = document.getElementById('qr-boxes');
             const platesPerBoxInput = document.getElementById('qr-plates-per-box');
             const totalDisplay = document.getElementById('total-plates-display');
@@ -1285,191 +738,307 @@
             if (boxesInput && platesPerBoxInput) {
                 boxesInput.addEventListener('input', updateTotalCalculation);
                 platesPerBoxInput.addEventListener('input', updateTotalCalculation);
-                updateTotalCalculation(); // Initial calculation
+                updateTotalCalculation();
             }
         }
 
-        function generatePalletId() {
-            const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
-            const random = Math.floor(Math.random() * 900) + 100; // 3-digit random number
-            return `PLT${timestamp}${random}`;
-        }
-
-        function generateBatchId() {
-            // Keep this for legacy compatibility
-            const timestamp = Date.now();
-            const random = Math.floor(Math.random() * 1000);
-            return `BATCH${timestamp}${random}`;
-        }
-
-        function generateQRCodeSVG(text) {
-            // Simple QR code placeholder - in real implementation, use a QR library
-            return `
-                <svg width="150" height="150" viewBox="0 0 150 150">
-                    <rect width="150" height="150" fill="white" stroke="#000" stroke-width="1"/>
-                    <text x="75" y="65" text-anchor="middle" dominant-baseline="middle" font-size="8" fill="#000">
-                        PALLET QR
-                    </text>
-                    <text x="75" y="80" text-anchor="middle" dominant-baseline="middle" font-size="6" fill="#666">
-                        ${text.length > 15 ? text.substring(0, 15) + '...' : text}
-                    </text>
-                    <text x="75" y="95" text-anchor="middle" dominant-baseline="middle" font-size="5" fill="#999">
-                        Scan to process
-                    </text>
-                </svg>
-            `;
-        }
-
-        function generatePalletQR(plateSize, boxes, platesPerBox, palletId) {
-            const totalQty = boxes * platesPerBox;
-            const qrData = `${plateSize}|${boxes}|${platesPerBox}|${palletId}`;
+        function updateEditableInventory() {
+            const tbody = document.getElementById('editable-inventory');
             
-            return `
-                <div class="qr-card">
-                    <h4>🏷️ Pallet: ${palletId}</h4>
-                    <p><strong>Plate Size:</strong> ${plateSize}</p>
-                    <p><strong>Boxes:</strong> ${boxes}</p>
-                    <p><strong>Plates/Box:</strong> ${platesPerBox}</p>
-                    <p><strong>Total Plates:</strong> ${totalQty}</p>
-                    <div class="qr-code">
-                        ${generateQRCodeSVG(qrData)}
-                    </div>
-                    <small style="word-break: break-all; font-family: monospace;">${qrData}</small>
-                    <br><br>
-                    <button class="btn" onclick="downloadPalletQR('${palletId}', '${qrData}')">📥 Download</button>
-                    <button class="btn" onclick="printPalletQR('${palletId}')">🖨️ Print Label</button>
-                </div>
-            `;
-        }
-
-        function generateBatchQRs() {
-            const commonSizes = ['50x100', '75x150', '100x200', '50x150', '75x100', '100x150', '50x200', '75x200', '100x100', '125x150'];
-            const generatedDiv = document.getElementById('generated-qr');
-            
-            let html = '<h3>📦 Common Sizes - Pallet QR Codes</h3>';
-            
-            commonSizes.forEach(size => {
-                const palletId = generatePalletId();
-                const boxes = 20; // Default boxes
-                const platesPerBox = 25; // Default plates per box
-                html += generatePalletQR(size, boxes, platesPerBox, palletId);
-            });
-            
-            generatedDiv.innerHTML = html;
-        }
-
-        function generateAllQRs() {
-            const generatedDiv = document.getElementById('generated-qr');
-            
-            let html = '<h3>🎯 All Plate Sizes - Pallet QR Codes</h3>';
-            
-            plates.forEach(plate => {
-                const palletId = generatePalletId();
-                const boxes = 20; // Default boxes
-                const platesPerBox = 25; // Default plates per box
-                html += generatePalletQR(plate.size, boxes, platesPerBox, palletId);
-            });
-            
-            generatedDiv.innerHTML = html;
-        }
-
-        function downloadPalletQR(palletId, qrData) {
-            // Create a detailed text file with the pallet data
-            const content = `PALLET QR CODE DATA
-============================
-Pallet ID: ${palletId}
-QR Code Data: ${qrData}
-
-Format: PlateSize|BoxesOnPallet|PlatesPerBox|PalletID
-
-Instructions:
-1. Use this data to generate a real QR code with your preferred QR generator
-2. Print the QR code and attach to the pallet
-3. When scanning, this data will be processed by your storage management system
-`;
-            const blob = new Blob([content], { type: 'text/plain' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `pallet_${palletId}.txt`;
-            link.click();
-        }
-
-        function printPalletQR(palletId) {
-            alert(`Print pallet label for ${palletId} - In a real implementation, this would send the QR code label to your printer.`);
-        }
-
-        function addTransaction(data) {
-            transactions.unshift({
-                id: transactions.length + 1,
-                ...data,
-                date: new Date().toISOString()
-            });
-        }
-
-        function updateTransactionsTable() {
-            const transactionsTable = document.getElementById('transactions-table');
-            
-            if (transactions.length === 0) {
-                transactionsTable.innerHTML = '<tr><td colspan="6">No transactions yet.</td></tr>';
+            if (plates.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">No inventory data available</td></tr>';
                 return;
             }
 
-            transactionsTable.innerHTML = transactions.map(tx => `
+            tbody.innerHTML = plates.map(plate => `
+                <tr>
+                    <td>${plate.size}</td>
+                    <td>
+                        <input type="number" value="${plate.quantity}" 
+                               onchange="updatePlateData(${plate.id}, 'quantity', this.value)" 
+                               min="0">
+                    </td>
+                    <td>
+                        <input type="number" value="${plate.threshold}" 
+                               onchange="updatePlateData(${plate.id}, 'threshold', this.value)" 
+                               min="0">
+                    </td>
+                    <td>
+                        <span class="status ${plate.status}">
+                            ${plate.status === 'ok' ? '✅ OK' : '⚠️ Low'}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateTransactionsTable() {
+            const tbody = document.getElementById('transactions-table');
+            
+            if (transactions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">No transactions yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = transactions.map(tx => `
                 <tr>
                     <td>${new Date(tx.date).toLocaleString()}</td>
                     <td>${tx.plate_size}</td>
                     <td>${tx.type === 'in' ? '+' : '-'}${tx.quantity}</td>
-                    <td>${tx.type === 'in' ? 'IN' : 'OUT'}</td>
+                    <td>${tx.type.toUpperCase()}</td>
                     <td>${tx.source.toUpperCase()}</td>
                     <td>${tx.batch_id || '-'}</td>
                 </tr>
             `).join('');
         }
 
-        // Manual form submission
-        document.getElementById('manual-form').addEventListener('submit', function(e) {
+        // Page navigation
+        function showPage(pageId) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            // Remove active class from all nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected page
+            document.getElementById(pageId).classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+
+            // Refresh data when switching pages
+            if (pageId === 'pending') {
+                loadPending();
+            } else if (pageId === 'transactions') {
+                loadTransactions();
+            }
+        }
+
+        // Action functions
+        async function processQRCode() {
+            const qrData = document.getElementById('qr-url').value.trim();
+            const resultDiv = document.getElementById('qr-result');
+
+            if (!qrData) {
+                resultDiv.innerHTML = '<div class="alert error">Please enter QR code data</div>';
+                return;
+            }
+
+            try {
+                const result = await apiCall('/api/inbound', {
+                    method: 'POST',
+                    body: JSON.stringify({ qr_data: qrData })
+                });
+
+                resultDiv.innerHTML = `
+                    <div class="alert success">
+                        <strong>✅ Pallet QR Code Processed Successfully!</strong><br>
+                        <strong>Pallet ID:</strong> ${result.pallet.batch_id}<br>
+                        <strong>Plate Size:</strong> ${result.pallet.plate_size}<br>
+                        <strong>Total Quantity:</strong> ${result.pallet.quantity}<br>
+                        <strong>Status:</strong> Pending Approval
+                    </div>
+                `;
+
+                document.getElementById('qr-url').value = '';
+                loadStats();
+                loadPending();
+
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function approveDelivery(batchId) {
+            try {
+                await apiCall(`/api/approve/${batchId}`, { method: 'POST' });
+                alert('Delivery approved successfully!');
+                loadPlates();
+                loadStats();
+                loadPending();
+                loadTransactions();
+            } catch (error) {
+                alert('Error approving delivery: ' + error.message);
+            }
+        }
+
+        async function rejectDelivery(batchId) {
+            try {
+                await apiCall(`/api/reject/${batchId}`, { method: 'POST' });
+                alert('Delivery rejected.');
+                loadStats();
+                loadPending();
+            } catch (error) {
+                alert('Error rejecting delivery: ' + error.message);
+            }
+        }
+
+        async function updatePlateData(plateId, field, value) {
+            const plate = plates.find(p => p.id === plateId);
+            if (!plate) return;
+
+            try {
+                const updatedPlate = await apiCall('/api/plates', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        id: plateId,
+                        quantity: field === 'quantity' ? parseInt(value) : plate.quantity,
+                        threshold: field === 'threshold' ? parseInt(value) : plate.threshold
+                    })
+                });
+
+                // Update local state
+                const index = plates.findIndex(p => p.id === plateId);
+                if (index !== -1) {
+                    plates[index] = updatedPlate;
+                }
+
+                loadStats();
+                updateDashboard();
+                updateEditableInventory();
+
+            } catch (error) {
+                alert('Error updating plate: ' + error.message);
+                loadPlates(); // Reload to restore original values
+            }
+        }
+
+        async function clearAllData() {
+            if (!confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
+                return;
+            }
+
+            if (!confirm('This will delete ALL inventory, transactions, and pending deliveries. Are you absolutely sure?')) {
+                return;
+            }
+
+            try {
+                const result = await apiCall('/api/clear-all', { method: 'POST' });
+                alert(result.message || 'All data has been cleared successfully');
+                
+                // Reload all data
+                loadPlates();
+                loadStats();
+                loadPending();
+                loadTransactions();
+                
+            } catch (error) {
+                alert('Error clearing data: ' + error.message);
+            }
+        }
+
+        // Export functions
+        function exportInventory() {
+            const csvContent = "data:text/csv;charset=utf-8," + 
+                "plate_size,quantity,threshold,status\n" +
+                plates.map(plate => `${plate.size},${plate.quantity},${plate.threshold},${plate.status}`).join('\n');
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `inventory_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportTransactions() {
+            const csvContent = "data:text/csv;charset=utf-8," + 
+                "date,plate_size,quantity,type,source,batch_id,notes\n" +
+                transactions.map(tx => 
+                    `${tx.date},${tx.plate_size},${tx.quantity},${tx.type},${tx.source},${tx.batch_id || ''},${tx.notes || ''}`
+                ).join('\n');
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `transactions_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Form handlers
+        document.getElementById('manual-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const plateSize = document.getElementById('manual-plate').value;
             const type = document.getElementById('manual-type').value;
-            const qty = parseInt(document.getElementById('manual-qty').value);
+            const quantity = parseInt(document.getElementById('manual-qty').value);
             const notes = document.getElementById('manual-notes').value;
 
-            const plate = plates.find(p => p.size === plateSize);
-            if (!plate) return;
+            try {
+                await apiCall('/api/manual', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        plate_size: plateSize,
+                        quantity: quantity,
+                        type: type,
+                        notes: notes
+                    })
+                });
 
-            if (type === 'out' && plate.quantity < qty) {
-                alert('Error: Not enough stock available.');
-                return;
+                alert(`Stock ${type === 'in' ? 'added' : 'removed'} successfully!`);
+                document.getElementById('manual-form').reset();
+                
+                loadPlates();
+                loadStats();
+                loadTransactions();
+
+            } catch (error) {
+                alert('Error: ' + error.message);
             }
-
-            // Update stock
-            if (type === 'in') {
-                plate.quantity += qty;
-            } else {
-                plate.quantity -= qty;
-            }
-
-            // Add transaction
-            addTransaction({
-                plate_size: plateSize,
-                quantity: qty,
-                type: type,
-                source: 'manual',
-                notes: notes
-            });
-
-            // Reset form
-            document.getElementById('manual-form').reset();
-            
-            // Show success message
-            alert(`Stock ${type === 'in' ? 'added' : 'removed'} successfully!`);
-            
-            updateUI();
         });
 
-        // Initialize the application
-        initializeData();
+        document.getElementById('qr-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const plateSize = document.getElementById('qr-plate-size').value;
+            const boxes = parseInt(document.getElementById('qr-boxes').value);
+            const platesPerBox = parseInt(document.getElementById('qr-plates-per-box').value);
+            
+            try {
+                const palletIdResponse = await apiCall('/api/generate-pallet-id');
+                const palletId = palletIdResponse.pallet_id;
+                
+                const qrData = `${plateSize}|${boxes}|${platesPerBox}|${palletId}`;
+                
+                const generatedDiv = document.getElementById('generated-qr');
+                generatedDiv.innerHTML = `
+                    <h3>📱 Generated Pallet QR Code</h3>
+                    <div class="qr-card">
+                        <h4>🏷️ Pallet: ${palletId}</h4>
+                        <p><strong>Plate Size:</strong> ${plateSize}</p>
+                        <p><strong>Boxes:</strong> ${boxes}</p>
+                        <p><strong>Plates/Box:</strong> ${platesPerBox}</p>
+                        <p><strong>Total Plates:</strong> ${boxes * platesPerBox}</p>
+                        <div class="qr-code">
+                            <div style="padding: 20px;">
+                                <strong>QR DATA:</strong><br>
+                                <small style="word-break: break-all; font-family: monospace;">${qrData}</small>
+                            </div>
+                        </div>
+                        <button class="btn" onclick="copyToClipboard('${qrData}')">📋 Copy QR Data</button>
+                    </div>
+                `;
+                
+            } catch (error) {
+                alert('Error generating pallet ID: ' + error.message);
+            }
+        });
+
+        // Utility functions
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('QR data copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
+        }
     </script>
 </body>
 </html>
