@@ -257,6 +257,53 @@ def manual_adjustment():
     
     return jsonify({'success': True, 'plate': plate.to_dict()})
 
+@app.route('/api/plates/create', methods=['POST'])
+def create_plate():
+    data = request.json
+    
+    # Validate input
+    plate_size = data.get('plate_size', '').strip()
+    if not plate_size:
+        return jsonify({'error': 'Plate size is required'}), 400
+    
+    # Check if plate already exists
+    existing_plate = Plate.query.filter_by(size=plate_size).first()
+    if existing_plate:
+        return jsonify({'error': f'Plate size {plate_size} already exists'}), 400
+    
+    try:
+        # Create new plate
+        new_plate = Plate(
+            size=plate_size,
+            quantity=int(data.get('quantity', 0)),
+            threshold=int(data.get('threshold', 50))
+        )
+        
+        db.session.add(new_plate)
+        
+        # Add initial stock transaction if quantity > 0
+        if new_plate.quantity > 0:
+            transaction = Transaction(
+                plate_size=plate_size,
+                quantity=new_plate.quantity,
+                type='in',
+                source='manual',
+                notes=f'Initial stock for new plate size {plate_size}'
+            )
+            db.session.add(transaction)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'plate': new_plate.to_dict(),
+            'message': f'Plate size {plate_size} created successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/transactions')
 def get_transactions():
     transactions = Transaction.query.order_by(Transaction.date.desc()).limit(100).all()
