@@ -11,14 +11,18 @@ CORS(app)
 
 # Database Configuration for Supabase
 DATABASE_URL = os.environ.get('DATABASE_URL')
+print(f"Original DATABASE_URL: {DATABASE_URL}")
+
 if DATABASE_URL:
     # Handle both postgres:// and postgresql:// prefixes
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
     elif DATABASE_URL.startswith("postgresql://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+    print(f"Transformed DATABASE_URL: {DATABASE_URL}")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL or 'sqlite:///storage.db'
+print(f"Final SQLALCHEMY_DATABASE_URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
