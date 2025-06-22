@@ -266,8 +266,10 @@ def init_db():
     with app.app_context():
         db.create_all()
         
-        # Check if we need to seed data
-        if Plate.query.count() == 0:
+        # Only seed data if no plates exist AND no transactions exist
+        # This prevents re-seeding if the app restarts
+        if Plate.query.count() == 0 and Transaction.query.count() == 0:
+            print("Database is empty, seeding with initial data...")
             # Create sample plates
             plate_sizes = [
                 '50x100', '75x150', '100x200', '50x150', '75x100', '100x150',
@@ -300,7 +302,11 @@ def init_db():
             
             db.session.commit()
             print("Database initialized with sample data!")
+        else:
+            print(f"Database already has data: {Plate.query.count()} plates, {Transaction.query.count()} transactions")
 
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
+# Initialize database when module is imported (for gunicorn)
+init_db()
