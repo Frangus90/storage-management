@@ -101,8 +101,16 @@ def index():
 
 @app.route('/api/plates')
 def get_plates():
-    plates = Plate.query.all()
-    return jsonify([plate.to_dict() for plate in plates])
+    try:
+        plates = Plate.query.all()
+        print(f"API /api/plates - Found {len(plates)} plates in database")
+        if plates:
+            print(f"First plate example: {plates[0].size} = {plates[0].quantity}")
+        result = [plate.to_dict() for plate in plates]
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error in /api/plates: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/plates', methods=['POST'])
 def update_plate():
@@ -269,13 +277,21 @@ def generate_pallet_id():
 def init_db():
     with app.app_context():
         try:
+            print("=== DATABASE INITIALIZATION START ===")
             db.create_all()
+            print("Tables created successfully")
             
             # Check if plates table exists and has data
             plate_count = Plate.query.count()
             transaction_count = Transaction.query.count()
             
             print(f"Found {plate_count} plates and {transaction_count} transactions in database")
+            
+            if plate_count > 0:
+                # Show first few plates from database
+                first_plates = Plate.query.limit(3).all()
+                for plate in first_plates:
+                    print(f"Existing plate: {plate.size} = {plate.quantity} (threshold: {plate.threshold})")
             
             # Only seed if truly empty
             if plate_count == 0:
@@ -299,6 +315,7 @@ def init_db():
                         threshold=random.randint(50, 149)
                     )
                     db.session.add(plate)
+                    print(f"Adding new plate: {size} = {plate.quantity}")
                 
                 # Add sample pending delivery only if no plates existed
                 sample_inbound = InboundQueue(
@@ -313,11 +330,15 @@ def init_db():
                 db.session.commit()
                 print("Database initialized with sample data!")
             else:
-                print(f"Database already has {plate_count} plates, skipping initialization")
+                print(f"Database already has {plate_count} plates, SKIPPING initialization")
+            
+            print("=== DATABASE INITIALIZATION END ===")
                 
         except Exception as e:
             print(f"Database initialization error: {e}")
             db.session.rollback()
+            import traceback
+            traceback.print_exc()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
