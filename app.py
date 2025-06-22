@@ -264,46 +264,56 @@ def generate_pallet_id():
 # Initialize database
 def init_db():
     with app.app_context():
-        db.create_all()
-        
-        # Only seed data if no plates exist AND no transactions exist
-        # This prevents re-seeding if the app restarts
-        if Plate.query.count() == 0 and Transaction.query.count() == 0:
-            print("Database is empty, seeding with initial data...")
-            # Create sample plates
-            plate_sizes = [
-                '50x100', '75x150', '100x200', '50x150', '75x100', '100x150',
-                '50x200', '75x200', '100x100', '125x150', '125x200', '150x200',
-                '50x250', '75x250', '100x250', '125x250', '150x250', '200x250',
-                '50x300', '75x300', '100x300', '125x300', '150x300', '200x300',
-                '62x150', '87x200', '112x250', '137x300', '162x350', '187x400',
-                '38x125', '63x175', '88x225', '113x275', '138x325', '163x375',
-                '44x140', '69x190', '94x240'
-            ]
+        try:
+            db.create_all()
             
-            import random
-            for size in plate_sizes:
-                plate = Plate(
-                    size=size,
-                    quantity=random.randint(50, 450),
-                    threshold=random.randint(50, 149)
+            # Check if plates table exists and has data
+            plate_count = Plate.query.count()
+            transaction_count = Transaction.query.count()
+            
+            print(f"Found {plate_count} plates and {transaction_count} transactions in database")
+            
+            # Only seed if truly empty
+            if plate_count == 0:
+                print("Database is empty, seeding with initial data...")
+                # Create sample plates
+                plate_sizes = [
+                    '50x100', '75x150', '100x200', '50x150', '75x100', '100x150',
+                    '50x200', '75x200', '100x100', '125x150', '125x200', '150x200',
+                    '50x250', '75x250', '100x250', '125x250', '150x250', '200x250',
+                    '50x300', '75x300', '100x300', '125x300', '150x300', '200x300',
+                    '62x150', '87x200', '112x250', '137x300', '162x350', '187x400',
+                    '38x125', '63x175', '88x225', '113x275', '138x325', '163x375',
+                    '44x140', '69x190', '94x240'
+                ]
+                
+                import random
+                for size in plate_sizes:
+                    plate = Plate(
+                        size=size,
+                        quantity=random.randint(50, 450),
+                        threshold=random.randint(50, 149)
+                    )
+                    db.session.add(plate)
+                
+                # Add sample pending delivery only if no plates existed
+                sample_inbound = InboundQueue(
+                    plate_size='75x150',
+                    quantity=500,
+                    batch_id='PLT123456789',
+                    boxes=20,
+                    plates_per_box=25
                 )
-                db.session.add(plate)
-            
-            # Add sample pending delivery
-            sample_inbound = InboundQueue(
-                plate_size='75x150',
-                quantity=500,
-                batch_id='PLT123456789',
-                boxes=20,
-                plates_per_box=25
-            )
-            db.session.add(sample_inbound)
-            
-            db.session.commit()
-            print("Database initialized with sample data!")
-        else:
-            print(f"Database already has data: {Plate.query.count()} plates, {Transaction.query.count()} transactions")
+                db.session.add(sample_inbound)
+                
+                db.session.commit()
+                print("Database initialized with sample data!")
+            else:
+                print(f"Database already has {plate_count} plates, skipping initialization")
+                
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+            db.session.rollback()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
