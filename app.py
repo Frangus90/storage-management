@@ -266,6 +266,21 @@ def get_stats():
         'pending_deliveries': pending_deliveries
     })
 
+@app.route('/api/clear-all', methods=['POST'])
+def clear_all_data():
+    try:
+        # Clear all tables
+        Transaction.query.delete()
+        InboundQueue.query.delete()
+        Plate.query.delete()
+        db.session.commit()
+        print("All database tables cleared successfully")
+        return jsonify({'success': True, 'message': 'All data cleared'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error clearing database: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/generate-pallet-id')
 def generate_pallet_id():
     timestamp = str(int(datetime.now().timestamp()))[-6:]
@@ -279,59 +294,13 @@ def init_db():
         try:
             print("=== DATABASE INITIALIZATION START ===")
             db.create_all()
-            print("Tables created successfully")
+            print("Empty tables created successfully")
             
             # Check if plates table exists and has data
             plate_count = Plate.query.count()
             transaction_count = Transaction.query.count()
             
             print(f"Found {plate_count} plates and {transaction_count} transactions in database")
-            
-            if plate_count > 0:
-                # Show first few plates from database
-                first_plates = Plate.query.limit(3).all()
-                for plate in first_plates:
-                    print(f"Existing plate: {plate.size} = {plate.quantity} (threshold: {plate.threshold})")
-            
-            # Only seed if truly empty
-            if plate_count == 0:
-                print("Database is empty, seeding with initial data...")
-                # Create sample plates
-                plate_sizes = [
-                    '50x100', '75x150', '100x200', '50x150', '75x100', '100x150',
-                    '50x200', '75x200', '100x100', '125x150', '125x200', '150x200',
-                    '50x250', '75x250', '100x250', '125x250', '150x250', '200x250',
-                    '50x300', '75x300', '100x300', '125x300', '150x300', '200x300',
-                    '62x150', '87x200', '112x250', '137x300', '162x350', '187x400',
-                    '38x125', '63x175', '88x225', '113x275', '138x325', '163x375',
-                    '44x140', '69x190', '94x240'
-                ]
-                
-                import random
-                for size in plate_sizes:
-                    plate = Plate(
-                        size=size,
-                        quantity=random.randint(50, 450),
-                        threshold=random.randint(50, 149)
-                    )
-                    db.session.add(plate)
-                    print(f"Adding new plate: {size} = {plate.quantity}")
-                
-                # Add sample pending delivery only if no plates existed
-                sample_inbound = InboundQueue(
-                    plate_size='75x150',
-                    quantity=500,
-                    batch_id='PLT123456789',
-                    boxes=20,
-                    plates_per_box=25
-                )
-                db.session.add(sample_inbound)
-                
-                db.session.commit()
-                print("Database initialized with sample data!")
-            else:
-                print(f"Database already has {plate_count} plates, SKIPPING initialization")
-            
             print("=== DATABASE INITIALIZATION END ===")
                 
         except Exception as e:
