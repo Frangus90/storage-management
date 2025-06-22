@@ -256,15 +256,21 @@ def get_transactions():
 
 @app.route('/api/stats')
 def get_stats():
-    total_plates = Plate.query.count()
-    low_stock = Plate.query.filter(Plate.quantity <= Plate.threshold).count()
-    pending_deliveries = InboundQueue.query.filter_by(status='pending').count()
-    
-    return jsonify({
-        'total_plates': total_plates,
-        'low_stock': low_stock,
-        'pending_deliveries': pending_deliveries
-    })
+    try:
+        total_plates = Plate.query.count()
+        low_stock = Plate.query.filter(Plate.quantity <= Plate.threshold).count()
+        pending_deliveries = InboundQueue.query.filter_by(status='pending').count()
+        
+        print(f"API /api/stats - Total: {total_plates}, Low: {low_stock}, Pending: {pending_deliveries}")
+        
+        return jsonify({
+            'total_plates': total_plates,
+            'low_stock': low_stock,
+            'pending_deliveries': pending_deliveries
+        })
+    except Exception as e:
+        print(f"Error in /api/stats: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/clear-all', methods=['POST'])
 def clear_all_data():
