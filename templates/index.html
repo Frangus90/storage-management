@@ -177,6 +177,13 @@
             font-size: 14px;
         }
 
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+
         .alert {
             padding: 12px;
             border-radius: 4px;
@@ -337,6 +344,24 @@
             color: #666;
         }
 
+        .manual-mode-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .manual-mode-form h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        #stock-adjustment-btn.active,
+        #new-plate-btn.active {
+            background: #27ae60;
+        }
+
         @media (max-width: 600px) {
             body {
                 padding: 10px;
@@ -445,31 +470,63 @@
 
             <!-- Manual Entry Page -->
             <div id="manual" class="page">
-                <h2>Manual Stock Adjustment</h2>
-                <form id="manual-form">
-                    <div class="form-group">
-                        <label for="manual-plate">Plate Size:</label>
-                        <select id="manual-plate" required>
-                            <option value="">Loading plates...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="manual-type">Adjustment Type:</label>
-                        <select id="manual-type" required>
-                            <option value="in">Add Stock (+)</option>
-                            <option value="out">Remove Stock (-)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="manual-qty">Quantity:</label>
-                        <input type="number" id="manual-qty" min="1" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="manual-notes">Notes:</label>
-                        <textarea id="manual-notes" rows="3" placeholder="Reason for adjustment..."></textarea>
-                    </div>
-                    <button type="submit" class="btn">Apply Adjustment</button>
-                </form>
+                <h2>Manual Entry</h2>
+                
+                <!-- Toggle buttons for mode selection -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button class="btn" id="stock-adjustment-btn" onclick="showManualMode('stock-adjustment')">📦 Stock Adjustment</button>
+                    <button class="btn" id="new-plate-btn" onclick="showManualMode('new-plate')">➕ Add New Plate Size</button>
+                </div>
+
+                <!-- Stock Adjustment Form -->
+                <div id="stock-adjustment-form" class="manual-mode-form">
+                    <h3>Stock Adjustment</h3>
+                    <form id="manual-form">
+                        <div class="form-group">
+                            <label for="manual-plate">Plate Size:</label>
+                            <select id="manual-plate" required>
+                                <option value="">Loading plates...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="manual-type">Adjustment Type:</label>
+                            <select id="manual-type" required>
+                                <option value="in">Add Stock (+)</option>
+                                <option value="out">Remove Stock (-)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="manual-qty">Quantity:</label>
+                            <input type="number" id="manual-qty" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="manual-notes">Notes:</label>
+                            <textarea id="manual-notes" rows="3" placeholder="Reason for adjustment..."></textarea>
+                        </div>
+                        <button type="submit" class="btn">Apply Adjustment</button>
+                    </form>
+                </div>
+
+                <!-- New Plate Form -->
+                <div id="new-plate-form" class="manual-mode-form" style="display: none;">
+                    <h3>Add New Plate Size</h3>
+                    <form id="create-plate-form">
+                        <div class="form-group">
+                            <label for="new-plate-size">Plate Size:</label>
+                            <input type="text" id="new-plate-size" placeholder="e.g., 100x200" pattern="^\d+x\d+$" title="Enter plate size as WidthxHeight (e.g., 100x200)" required>
+                            <small>Format: WidthxHeight (numbers only, e.g., 100x200)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-plate-quantity">Initial Stock Quantity:</label>
+                            <input type="number" id="new-plate-quantity" min="0" value="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-plate-threshold">Low Stock Threshold:</label>
+                            <input type="number" id="new-plate-threshold" min="0" value="50" required>
+                        </div>
+                        <button type="submit" class="btn success">Create New Plate Size</button>
+                    </form>
+                </div>
             </div>
 
             <!-- Admin Page -->
@@ -574,6 +631,9 @@
             loadStats();
             loadPending();
             loadTransactions();
+            
+            // Initialize manual entry mode
+            showManualMode('stock-adjustment');
             
             // Refresh stats every 30 seconds
             setInterval(() => {
@@ -815,6 +875,8 @@
                 loadPending();
             } else if (pageId === 'transactions') {
                 loadTransactions();
+            } else if (pageId === 'manual') {
+                showManualMode('stock-adjustment');
             }
         }
 
@@ -962,6 +1024,26 @@
             document.body.removeChild(link);
         }
 
+        // Manual entry mode management
+        function showManualMode(mode) {
+            const stockForm = document.getElementById('stock-adjustment-form');
+            const newPlateForm = document.getElementById('new-plate-form');
+            const stockBtn = document.getElementById('stock-adjustment-btn');
+            const newPlateBtn = document.getElementById('new-plate-btn');
+
+            if (mode === 'stock-adjustment') {
+                stockForm.style.display = 'block';
+                newPlateForm.style.display = 'none';
+                stockBtn.classList.add('active');
+                newPlateBtn.classList.remove('active');
+            } else {
+                stockForm.style.display = 'none';
+                newPlateForm.style.display = 'block';
+                stockBtn.classList.remove('active');
+                newPlateBtn.classList.add('active');
+            }
+        }
+
         // Form handlers
         document.getElementById('manual-form').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -988,6 +1070,41 @@
                 loadPlates();
                 loadStats();
                 loadTransactions();
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        document.getElementById('create-plate-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const plateSize = document.getElementById('new-plate-size').value.trim();
+            const quantity = parseInt(document.getElementById('new-plate-quantity').value);
+            const threshold = parseInt(document.getElementById('new-plate-threshold').value);
+
+            try {
+                const result = await apiCall('/api/plates/create', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        plate_size: plateSize,
+                        quantity: quantity,
+                        threshold: threshold
+                    })
+                });
+
+                alert(result.message || 'Plate created successfully!');
+                document.getElementById('create-plate-form').reset();
+                
+                // Reload all data
+                loadPlates();
+                loadStats();
+                if (result.plate.quantity > 0) {
+                    loadTransactions();
+                }
+
+                // Switch back to stock adjustment mode
+                showManualMode('stock-adjustment');
 
             } catch (error) {
                 alert('Error: ' + error.message);
