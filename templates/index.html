@@ -177,13 +177,6 @@
             font-size: 14px;
         }
 
-        .form-group small {
-            display: block;
-            margin-top: 5px;
-            color: #666;
-            font-size: 12px;
-        }
-
         .alert {
             padding: 12px;
             border-radius: 4px;
@@ -344,22 +337,16 @@
             color: #666;
         }
 
-        .manual-mode-form {
+        .manual-tab-content {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 8px;
             margin-top: 10px;
         }
 
-        .manual-mode-form h3 {
-            margin-top: 0;
+        .manual-tab-content h3 {
             margin-bottom: 20px;
             color: #2c3e50;
-        }
-
-        #stock-adjustment-btn.active,
-        #new-plate-btn.active {
-            background: #27ae60;
         }
 
         @media (max-width: 600px) {
@@ -472,15 +459,19 @@
             <div id="manual" class="page">
                 <h2>Manual Entry</h2>
                 
-                <!-- Toggle buttons for mode selection -->
-                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                    <button class="btn" id="stock-adjustment-btn" onclick="showManualMode('stock-adjustment')">📦 Stock Adjustment</button>
-                    <button class="btn" id="new-plate-btn" onclick="showManualMode('new-plate')">➕ Add New Plate Size</button>
+                <!-- Tab buttons for switching between forms -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ddd;">
+                    <button class="btn" id="stock-adjustment-tab" onclick="showManualTab('stock-adjustment')" style="background: #3498db;">
+                        📦 Stock Adjustment
+                    </button>
+                    <button class="btn" id="new-plate-tab" onclick="showManualTab('new-plate')" style="background: #6c757d;">
+                        ➕ Add New Plate Size
+                    </button>
                 </div>
 
                 <!-- Stock Adjustment Form -->
-                <div id="stock-adjustment-form" class="manual-mode-form">
-                    <h3>Stock Adjustment</h3>
+                <div id="stock-adjustment-form" class="manual-tab-content">
+                    <h3>Adjust Existing Stock</h3>
                     <form id="manual-form">
                         <div class="form-group">
                             <label for="manual-plate">Plate Size:</label>
@@ -507,24 +498,25 @@
                     </form>
                 </div>
 
-                <!-- New Plate Form -->
-                <div id="new-plate-form" class="manual-mode-form" style="display: none;">
+                <!-- Add New Plate Form -->
+                <div id="new-plate-form" class="manual-tab-content" style="display: none;">
                     <h3>Add New Plate Size</h3>
-                    <form id="create-plate-form">
+                    <form id="add-plate-form">
                         <div class="form-group">
                             <label for="new-plate-size">Plate Size:</label>
-                            <input type="text" id="new-plate-size" placeholder="e.g., 100x200" pattern="^\d+x\d+$" title="Enter plate size as WidthxHeight (e.g., 100x200)" required>
-                            <small>Format: WidthxHeight (numbers only, e.g., 100x200)</small>
+                            <input type="text" id="new-plate-size" placeholder="e.g., 100x200" required 
+                                   pattern="[0-9]+x[0-9]+" title="Format: NUMBERxNUMBER (e.g., 100x200)">
+                            <small>Format: WIDTHxHEIGHT (e.g., 100x200)</small>
                         </div>
                         <div class="form-group">
-                            <label for="new-plate-quantity">Initial Stock Quantity:</label>
+                            <label for="new-plate-quantity">Initial Quantity:</label>
                             <input type="number" id="new-plate-quantity" min="0" value="0" required>
                         </div>
                         <div class="form-group">
                             <label for="new-plate-threshold">Low Stock Threshold:</label>
                             <input type="number" id="new-plate-threshold" min="0" value="50" required>
                         </div>
-                        <button type="submit" class="btn success">Create New Plate Size</button>
+                        <button type="submit" class="btn success">➕ Add New Plate Size</button>
                     </form>
                 </div>
             </div>
@@ -631,9 +623,6 @@
             loadStats();
             loadPending();
             loadTransactions();
-            
-            // Initialize manual entry mode
-            showManualMode('stock-adjustment');
             
             // Refresh stats every 30 seconds
             setInterval(() => {
@@ -875,8 +864,6 @@
                 loadPending();
             } else if (pageId === 'transactions') {
                 loadTransactions();
-            } else if (pageId === 'manual') {
-                showManualMode('stock-adjustment');
             }
         }
 
@@ -1024,26 +1011,6 @@
             document.body.removeChild(link);
         }
 
-        // Manual entry mode management
-        function showManualMode(mode) {
-            const stockForm = document.getElementById('stock-adjustment-form');
-            const newPlateForm = document.getElementById('new-plate-form');
-            const stockBtn = document.getElementById('stock-adjustment-btn');
-            const newPlateBtn = document.getElementById('new-plate-btn');
-
-            if (mode === 'stock-adjustment') {
-                stockForm.style.display = 'block';
-                newPlateForm.style.display = 'none';
-                stockBtn.classList.add('active');
-                newPlateBtn.classList.remove('active');
-            } else {
-                stockForm.style.display = 'none';
-                newPlateForm.style.display = 'block';
-                stockBtn.classList.remove('active');
-                newPlateBtn.classList.add('active');
-            }
-        }
-
         // Form handlers
         document.getElementById('manual-form').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -1076,7 +1043,7 @@
             }
         });
 
-        document.getElementById('create-plate-form').addEventListener('submit', async function(e) {
+        document.getElementById('add-plate-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const plateSize = document.getElementById('new-plate-size').value.trim();
@@ -1084,7 +1051,7 @@
             const threshold = parseInt(document.getElementById('new-plate-threshold').value);
 
             try {
-                const result = await apiCall('/api/plates/create', {
+                const result = await apiCall('/api/plates/new', {
                     method: 'POST',
                     body: JSON.stringify({
                         plate_size: plateSize,
@@ -1093,23 +1060,41 @@
                     })
                 });
 
-                alert(result.message || 'Plate created successfully!');
-                document.getElementById('create-plate-form').reset();
+                alert(result.message || `Plate size ${plateSize} added successfully!`);
+                document.getElementById('add-plate-form').reset();
                 
-                // Reload all data
-                loadPlates();
-                loadStats();
-                if (result.plate.quantity > 0) {
-                    loadTransactions();
-                }
-
-                // Switch back to stock adjustment mode
-                showManualMode('stock-adjustment');
+                // Reload data and switch back to stock adjustment tab
+                await loadPlates();
+                await loadStats();
+                await loadTransactions();
+                
+                showManualTab('stock-adjustment');
 
             } catch (error) {
                 alert('Error: ' + error.message);
             }
         });
+
+        // Manual Entry tab switching
+        function showManualTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.manual-tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Reset tab button styles
+            document.getElementById('stock-adjustment-tab').style.background = '#6c757d';
+            document.getElementById('new-plate-tab').style.background = '#6c757d';
+            
+            // Show selected tab
+            if (tabName === 'stock-adjustment') {
+                document.getElementById('stock-adjustment-form').style.display = 'block';
+                document.getElementById('stock-adjustment-tab').style.background = '#3498db';
+            } else if (tabName === 'new-plate') {
+                document.getElementById('new-plate-form').style.display = 'block';
+                document.getElementById('new-plate-tab').style.background = '#3498db';
+            }
+        }
 
         document.getElementById('qr-form').addEventListener('submit', async function(e) {
             e.preventDefault();
