@@ -5,6 +5,7 @@ from flask_cors import CORS
 from datetime import datetime
 import os
 import uuid
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -257,8 +258,8 @@ def manual_adjustment():
     
     return jsonify({'success': True, 'plate': plate.to_dict()})
 
-@app.route('/api/plates/create', methods=['POST'])
-def create_plate():
+@app.route('/api/plates/new', methods=['POST'])
+def add_new_plate():
     data = request.json
     
     # Validate input
@@ -266,13 +267,144 @@ def create_plate():
     if not plate_size:
         return jsonify({'error': 'Plate size is required'}), 400
     
-    # Check if plate already exists
-    existing_plate = Plate.query.filter_by(size=plate_size).first()
-    if existing_plate:
-        return jsonify({'error': f'Plate size {plate_size} already exists'}), 400
+    # Validate format (e.g., 100x200)
+    import re
+    if not re.match(r'^\d+x\d+
+
+@app.route('/api/transactions')
+def get_transactions():
+    transactions = Transaction.query.order_by(Transaction.date.desc()).limit(100).all()
+    return jsonify([t.to_dict() for t in transactions])
+
+@app.route('/api/stats')
+def get_stats():
+    try:
+        total_plates = Plate.query.count()
+        low_stock = Plate.query.filter(Plate.quantity <= Plate.threshold).count()
+        pending_deliveries = InboundQueue.query.filter_by(status='pending').count()
+        
+        print(f"API /api/stats - Total: {total_plates}, Low: {low_stock}, Pending: {pending_deliveries}")
+        
+        return jsonify({
+            'total_plates': total_plates,
+            'low_stock': low_stock,
+            'pending_deliveries': pending_deliveries
+        })
+    except Exception as e:
+        print(f"Error in /api/stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/clear-all', methods=['POST'])
+def clear_all_data():
+    try:
+        # Clear all tables
+        Transaction.query.delete()
+        InboundQueue.query.delete()
+        Plate.query.delete()
+        db.session.commit()
+        print("All database tables cleared successfully")
+        return jsonify({'success': True, 'message': 'All data cleared'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error clearing database: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-pallet-id')
+def generate_pallet_id():
+    timestamp = str(int(datetime.now().timestamp()))[-6:]
+    random_num = str(uuid.uuid4().int)[:3]
+    pallet_id = f"PLT{timestamp}{random_num}"
+    return jsonify({'pallet_id': pallet_id})
+
+# Initialize database with sample data
+def init_sample_plates():
+    """Initialize the database with sample plate sizes if empty"""
+    plate_sizes = [
+        '50x100', '75x150', '100x200', '50x150', '75x100', '100x150',
+        '50x200', '75x200', '100x100', '125x150', '125x200', '150x200',
+        '50x250', '75x250', '100x250', '125x250', '150x250', '200x250',
+        '50x300', '75x300', '100x300', '125x300', '150x300', '200x300',
+        '62x150', '87x200', '112x250', '137x300', '162x350', '187x400',
+        '38x125', '63x175', '88x225', '113x275', '138x325', '163x375',
+        '44x140', '69x190', '94x240'
+    ]
     
     try:
-        # Create new plate
+        # Check if we have any plates
+        if Plate.query.count() == 0:
+            print("No plates found, initializing with sample data...")
+            
+            # Add sample plates
+            for size in plate_sizes:
+                plate = Plate(
+                    size=size,
+                    quantity=100,  # Default starting quantity
+                    threshold=50   # Default threshold
+                )
+                db.session.add(plate)
+            
+            db.session.commit()
+            print(f"Added {len(plate_sizes)} sample plate sizes")
+            
+            # Add a sample pending delivery for demonstration
+            sample_inbound = InboundQueue(
+                plate_size='75x150',
+                quantity=500,
+                batch_id='PLT123456789',
+                status='pending',
+                boxes=20,
+                plates_per_box=25
+            )
+            db.session.add(sample_inbound)
+            db.session.commit()
+            print("Added sample pending delivery")
+            
+    except Exception as e:
+        print(f"Error initializing sample data: {e}")
+        db.session.rollback()
+
+# Initialize database
+def init_db():
+    with app.app_context():
+        try:
+            print("=== DATABASE INITIALIZATION START ===")
+            db.create_all()
+            print("Database tables created successfully")
+            
+            # Initialize sample data if needed
+            init_sample_plates()
+            
+            # Check current state
+            plate_count = Plate.query.count()
+            transaction_count = Transaction.query.count()
+            pending_count = InboundQueue.query.filter_by(status='pending').count()
+            
+            print(f"Current database state:")
+            print(f"  - Plates: {plate_count}")
+            print(f"  - Transactions: {transaction_count}")
+            print(f"  - Pending deliveries: {pending_count}")
+            print("=== DATABASE INITIALIZATION END ===")
+                
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+            db.session.rollback()
+            import traceback
+            traceback.print_exc()
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
+# Initialize database when module is imported (for gunicorn)
+init_db(), plate_size):
+        return jsonify({'error': 'Invalid plate size format. Use format: WIDTHxHEIGHT (e.g., 100x200)'}), 400
+    
+    # Check if plate already exists
+    existing = Plate.query.filter_by(size=plate_size).first()
+    if existing:
+        return jsonify({'error': f'Plate size {plate_size} already exists'}), 400
+    
+    # Create new plate
+    try:
         new_plate = Plate(
             size=plate_size,
             quantity=int(data.get('quantity', 0)),
@@ -297,7 +429,7 @@ def create_plate():
         return jsonify({
             'success': True,
             'plate': new_plate.to_dict(),
-            'message': f'Plate size {plate_size} created successfully'
+            'message': f'Plate size {plate_size} added successfully'
         })
         
     except Exception as e:
