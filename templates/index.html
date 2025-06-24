@@ -1,4 +1,11 @@
-<!DOCTYPE html>
+.alert ul {
+            margin-left: 20px;
+            list-style-type: disc;
+        }
+
+        .alert ul li {
+            margin: 5px 0;
+        }<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -193,6 +200,15 @@
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+
+        .alert ul {
+            margin-left: 20px;
+            list-style-type: disc;
+        }
+
+        .alert ul li {
+            margin: 5px 0;
         }
 
         .stats {
@@ -548,6 +564,34 @@
                     <p>Download your current inventory data:</p>
                     <button class="btn" onclick="exportInventory()">📋 Export Inventory (CSV)</button>
                     <button class="btn" onclick="exportTransactions()">📊 Export Transactions (CSV)</button>
+                </div>
+
+                <div class="data-section">
+                    <h3>📥 Import Pallet Data</h3>
+                    <p>Import multiple pallets via CSV. Format: WxL|PQ|BQ|UQID</p>
+                    <small>
+                        <strong>Format explanation:</strong><br>
+                        • WxL = Plate size (e.g., 76x254)<br>
+                        • PQ = Boxes on pallet<br>
+                        • BQ = Plates per box<br>
+                        • UQID = Unique ID to prevent double scanning<br>
+                        <strong>Example:</strong> 76x254|20|25|PLT123456
+                    </small>
+                    <div style="margin: 10px 0;">
+                        <button class="btn" onclick="downloadSampleCSV()">📄 Download Sample CSV</button>
+                        <button class="btn" onclick="generateInitialSetupCSV()">🏭 Generate Initial Setup CSV (39 plate sizes)</button>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <textarea id="csv-import-content" rows="10" placeholder="Paste CSV content here or use file upload below...
+76x254|20|25|PLT123456
+100x200|15|30|PLT123457
+150x300|10|40|PLT123458" style="font-family: monospace;"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="file" id="csv-file-input" accept=".csv,.txt" style="flex: 1;">
+                        <button class="btn success" onclick="importCSV()">📥 Import CSV</button>
+                    </div>
+                    <div id="import-results" style="margin-top: 15px;"></div>
                 </div>
 
                 <div class="data-section">
@@ -1009,6 +1053,113 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+
+        function downloadSampleCSV() {
+            const sampleContent = `WxL|PQ|BQ|UQID
+76x254|20|25|PLT123456
+100x200|15|30|PLT123457
+150x300|10|40|PLT123458
+50x100|25|20|PLT123459
+75x150|30|15|PLT123460`;
+            
+            const csvContent = "data:text/csv;charset=utf-8," + sampleContent;
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "pallet_import_sample.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function generateInitialSetupCSV() {
+            // Generate a comprehensive CSV with various plate sizes for initial setup
+            const plateSizes = [
+                '50x100', '75x150', '100x200', '50x150', '75x100', '100x150',
+                '50x200', '75x200', '100x100', '125x150', '125x200', '150x200',
+                '50x250', '75x250', '100x250', '125x250', '150x250', '200x250',
+                '50x300', '75x300', '100x300', '125x300', '150x300', '200x300',
+                '62x150', '87x200', '112x250', '137x300', '162x350', '187x400',
+                '38x125', '63x175', '88x225', '113x275', '138x325', '163x375',
+                '44x140', '69x190', '94x240'
+            ];
+            
+            let csvContent = "WxL|PQ|BQ|UQID\n";
+            plateSizes.forEach((size, index) => {
+                const timestamp = Date.now() + index;
+                const palletId = `PLT${timestamp.toString().slice(-9)}`;
+                const boxes = Math.floor(Math.random() * 20) + 10; // 10-30 boxes
+                const platesPerBox = Math.floor(Math.random() * 30) + 20; // 20-50 plates
+                csvContent += `${size}|${boxes}|${platesPerBox}|${palletId}\n`;
+            });
+            
+            const encodedUri = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "initial_plate_setup.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // CSV Import functions
+        document.getElementById('csv-file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    document.getElementById('csv-import-content').value = event.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        async function importCSV() {
+            const csvContent = document.getElementById('csv-import-content').value.trim();
+            const resultsDiv = document.getElementById('import-results');
+            
+            if (!csvContent) {
+                resultsDiv.innerHTML = '<div class="alert error">Please provide CSV content to import</div>';
+                return;
+            }
+            
+            resultsDiv.innerHTML = '<div class="loading">Importing CSV data...</div>';
+            
+            try {
+                const result = await apiCall('/api/import-csv', {
+                    method: 'POST',
+                    body: JSON.stringify({ csv_content: csvContent })
+                });
+                
+                let resultHtml = `<div class="alert ${result.errors.length === 0 ? 'success' : 'error'}">`;
+                resultHtml += `<strong>${result.message}</strong><br>`;
+                
+                if (result.errors.length > 0) {
+                    resultHtml += '<br><strong>Errors:</strong><ul style="margin: 10px 0; text-align: left;">';
+                    result.errors.forEach(error => {
+                        resultHtml += `<li>${error}</li>`;
+                    });
+                    resultHtml += '</ul>';
+                }
+                
+                resultHtml += '</div>';
+                resultsDiv.innerHTML = resultHtml;
+                
+                // Clear the textarea and file input on success
+                if (result.imported > 0) {
+                    document.getElementById('csv-import-content').value = '';
+                    document.getElementById('csv-file-input').value = '';
+                    
+                    // Reload data
+                    loadPlates();
+                    loadStats();
+                    loadPending();
+                }
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="alert error">Import failed: ${error.message}</div>`;
+            }
         }
 
         // Form handlers
